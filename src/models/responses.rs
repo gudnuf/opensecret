@@ -400,6 +400,7 @@ pub struct Conversation {
     pub updated_at: DateTime<Utc>,
     pub project_id: Option<i64>,
     pub is_pinned: bool,
+    pub last_activity_at: DateTime<Utc>,
 }
 
 #[derive(Insertable, Debug)]
@@ -454,10 +455,7 @@ impl Conversation {
                 .filter(conversations::id.eq(conversation_id))
                 .filter(conversations::user_id.eq(user_id)),
         )
-        .set((
-            conversations::metadata_enc.eq(metadata_enc),
-            conversations::updated_at.eq(diesel::dsl::now),
-        ))
+        .set(conversations::metadata_enc.eq(metadata_enc))
         .get_result::<Conversation>(conn)
         .optional()?;
 
@@ -527,32 +525,32 @@ impl Conversation {
 
         // If we have an after cursor, we need to find its timestamp and apply cursor-based pagination
         if let Some(after_uuid) = after {
-            // Get the cursor conversation to find its updated_at and id
+            // Get the cursor conversation to find its last_activity_at and id
             let cursor_conv = conversations::table
                 .filter(conversations::uuid.eq(after_uuid))
                 .filter(conversations::user_id.eq(user_id))
-                .select((conversations::updated_at, conversations::id))
+                .select((conversations::last_activity_at, conversations::id))
                 .first::<(DateTime<Utc>, i64)>(conn)
                 .optional()?;
 
-            if let Some((updated_at, id)) = cursor_conv {
+            if let Some((last_activity_at, id)) = cursor_conv {
                 if order == "desc" {
-                    // For desc order, get items with updated_at < cursor OR (updated_at = cursor AND id < cursor_id)
+                    // For desc order, get items with last_activity_at < cursor OR (last_activity_at = cursor AND id < cursor_id)
                     query = query.filter(
-                        conversations::updated_at
-                            .lt(updated_at)
-                            .or(conversations::updated_at
-                                .eq(updated_at)
-                                .and(conversations::id.lt(id))),
+                        conversations::last_activity_at.lt(last_activity_at).or(
+                            conversations::last_activity_at
+                                .eq(last_activity_at)
+                                .and(conversations::id.lt(id)),
+                        ),
                     );
                 } else {
-                    // For asc order, get items with updated_at > cursor OR (updated_at = cursor AND id > cursor_id)
+                    // For asc order, get items with last_activity_at > cursor OR (last_activity_at = cursor AND id > cursor_id)
                     query = query.filter(
-                        conversations::updated_at
-                            .gt(updated_at)
-                            .or(conversations::updated_at
-                                .eq(updated_at)
-                                .and(conversations::id.gt(id))),
+                        conversations::last_activity_at.gt(last_activity_at).or(
+                            conversations::last_activity_at
+                                .eq(last_activity_at)
+                                .and(conversations::id.gt(id)),
+                        ),
                     );
                 }
             }
@@ -560,9 +558,15 @@ impl Conversation {
 
         // Apply ordering
         if order == "desc" {
-            query = query.order((conversations::updated_at.desc(), conversations::id.desc()));
+            query = query.order((
+                conversations::last_activity_at.desc(),
+                conversations::id.desc(),
+            ));
         } else {
-            query = query.order((conversations::updated_at.asc(), conversations::id.asc()));
+            query = query.order((
+                conversations::last_activity_at.asc(),
+                conversations::id.asc(),
+            ));
         }
 
         query

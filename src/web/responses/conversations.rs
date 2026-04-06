@@ -237,8 +237,8 @@ pub struct ConversationResponse {
     /// Unix timestamp when created
     pub created_at: i64,
 
-    /// Unix timestamp when last updated
-    pub updated_at: i64,
+    /// Unix timestamp when the conversation last had chat activity
+    pub last_activity_at: i64,
 }
 
 /// Response for listing conversation items

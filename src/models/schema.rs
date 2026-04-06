@@ -58,6 +58,7 @@ diesel::table! {
         updated_at -> Timestamptz,
         project_id -> Nullable<Int8>,
         is_pinned -> Bool,
+        last_activity_at -> Timestamptz,
     }
 }
 

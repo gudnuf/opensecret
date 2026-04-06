@@ -22,18 +22,19 @@ FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 -- should delete the conversations assigned to it.
 ALTER TABLE conversations
     ADD COLUMN project_id BIGINT REFERENCES conversation_projects(id) ON DELETE CASCADE,
-    ADD COLUMN is_pinned BOOLEAN NOT NULL DEFAULT FALSE;
+    ADD COLUMN is_pinned BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN last_activity_at TIMESTAMPTZ;
 
 -- Support FK cascade lookups, which filter by project_id without user_id.
 CREATE INDEX idx_conversations_project_id
     ON conversations(project_id)
     WHERE project_id IS NOT NULL;
 
-CREATE INDEX idx_conversations_project_updated_id
-    ON conversations(user_id, project_id, updated_at DESC, id DESC);
+CREATE INDEX idx_conversations_project_last_activity_id
+    ON conversations(user_id, project_id, last_activity_at DESC, id DESC);
 
-CREATE INDEX idx_conversations_pinned_updated_id
-    ON conversations(user_id, is_pinned, updated_at DESC, id DESC);
+CREATE INDEX idx_conversations_pinned_last_activity_id
+    ON conversations(user_id, is_pinned, last_activity_at DESC, id DESC);
 
 ALTER TABLE user_instructions
     ADD COLUMN project_id BIGINT REFERENCES conversation_projects(id) ON DELETE CASCADE;
@@ -66,27 +67,35 @@ WITH latest_activity AS (
     GROUP BY conversation_id
 )
 UPDATE conversations
-SET updated_at = GREATEST(conversations.updated_at, latest_activity.latest_activity_at)
+SET last_activity_at = latest_activity.latest_activity_at
 FROM latest_activity
 WHERE conversations.id = latest_activity.conversation_id;
 
+UPDATE conversations
+SET last_activity_at = created_at
+WHERE last_activity_at IS NULL;
+
+ALTER TABLE conversations
+    ALTER COLUMN last_activity_at SET DEFAULT CURRENT_TIMESTAMP,
+    ALTER COLUMN last_activity_at SET NOT NULL;
+
 -- Keep recency maintenance in the database so every write path stays consistent
 -- without requiring separate application-managed parent updates.
-CREATE OR REPLACE FUNCTION touch_conversation_updated_at_from_child()
+CREATE OR REPLACE FUNCTION touch_conversation_last_activity_at_from_child()
 RETURNS TRIGGER AS $$
 BEGIN
     UPDATE conversations
-    SET updated_at = CURRENT_TIMESTAMP
+    SET last_activity_at = CURRENT_TIMESTAMP
     WHERE id = COALESCE(NEW.conversation_id, OLD.conversation_id);
 
     RETURN COALESCE(NEW, OLD);
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER touch_conversation_updated_at_from_user_messages
+CREATE TRIGGER touch_conversation_last_activity_at_from_user_messages
 AFTER INSERT OR UPDATE ON user_messages
-FOR EACH ROW EXECUTE FUNCTION touch_conversation_updated_at_from_child();
+FOR EACH ROW EXECUTE FUNCTION touch_conversation_last_activity_at_from_child();
 
-CREATE TRIGGER touch_conversation_updated_at_from_assistant_messages
+CREATE TRIGGER touch_conversation_last_activity_at_from_assistant_messages
 AFTER INSERT OR UPDATE ON assistant_messages
-FOR EACH ROW EXECUTE FUNCTION touch_conversation_updated_at_from_child();
+FOR EACH ROW EXECUTE FUNCTION touch_conversation_last_activity_at_from_child();

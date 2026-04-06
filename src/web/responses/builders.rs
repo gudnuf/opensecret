@@ -252,7 +252,7 @@ impl ConversationBuilder {
                 project_id: None,
                 pinned: conv.is_pinned,
                 created_at: conv.created_at.timestamp(),
-                updated_at: conv.updated_at.timestamp(),
+                last_activity_at: conv.last_activity_at.timestamp(),
             },
         }
     }

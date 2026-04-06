@@ -2107,28 +2107,19 @@ impl DBConnection for PostgresConnection {
 
             if let Some(metadata_enc) = metadata_enc {
                 diesel::update(target)
-                    .set((
-                        conversations::metadata_enc.eq(metadata_enc),
-                        conversations::updated_at.eq(diesel::dsl::now),
-                    ))
+                    .set(conversations::metadata_enc.eq(metadata_enc))
                     .execute(tx)?;
             }
 
             if let Some(project_id) = project_id {
                 diesel::update(target)
-                    .set((
-                        conversations::project_id.eq(project_id),
-                        conversations::updated_at.eq(diesel::dsl::now),
-                    ))
+                    .set(conversations::project_id.eq(project_id))
                     .execute(tx)?;
             }
 
             if let Some(is_pinned) = is_pinned {
                 diesel::update(target)
-                    .set((
-                        conversations::is_pinned.eq(is_pinned),
-                        conversations::updated_at.eq(diesel::dsl::now),
-                    ))
+                    .set(conversations::is_pinned.eq(is_pinned))
                     .execute(tx)?;
             }
 
