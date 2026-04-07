@@ -50,6 +50,13 @@ pub fn validate_conversation_project_limit(
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConversationProjectFilter {
+    Any,
+    Assigned(i64),
+    Unassigned,
+}
+
 // Response status enum matching the database enum
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, DbEnum)]
 #[ExistingTypePath = "crate::models::schema::sql_types::ResponseStatus"]
@@ -611,15 +618,21 @@ impl Conversation {
         limit: i64,
         after: Option<Uuid>,
         order: &str,
-        project_id: Option<i64>,
+        project_filter: ConversationProjectFilter,
         pinned: Option<bool>,
     ) -> Result<Vec<Conversation>, ResponsesError> {
         let mut query = conversations::table
             .filter(conversations::user_id.eq(user_id))
             .into_boxed();
 
-        if let Some(project_id) = project_id {
-            query = query.filter(conversations::project_id.eq(Some(project_id)));
+        match project_filter {
+            ConversationProjectFilter::Any => {}
+            ConversationProjectFilter::Assigned(project_id) => {
+                query = query.filter(conversations::project_id.eq(Some(project_id)));
+            }
+            ConversationProjectFilter::Unassigned => {
+                query = query.filter(conversations::project_id.is_null());
+            }
         }
 
         if let Some(is_pinned) = pinned {

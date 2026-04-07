@@ -30,10 +30,10 @@ use crate::models::project_settings::{
 };
 use crate::models::responses::{
     validate_conversation_project_limit, AssistantMessage, Conversation, ConversationProject,
-    NewAssistantMessage, NewConversation, NewConversationProject, NewReasoningItem, NewResponse,
-    NewToolCall, NewToolOutput, NewUserInstruction, NewUserMessage, ProjectInstructionUpdate,
-    RawThreadMessage, RawThreadMessageMetadata, ReasoningItem, Response, ResponseStatus,
-    ResponsesError, ToolCall, ToolOutput, UserInstruction, UserMessage,
+    ConversationProjectFilter, NewAssistantMessage, NewConversation, NewConversationProject,
+    NewReasoningItem, NewResponse, NewToolCall, NewToolOutput, NewUserInstruction, NewUserMessage,
+    ProjectInstructionUpdate, RawThreadMessage, RawThreadMessageMetadata, ReasoningItem, Response,
+    ResponseStatus, ResponsesError, ToolCall, ToolOutput, UserInstruction, UserMessage,
 };
 use crate::models::token_usage::{NewTokenUsage, TokenUsage, TokenUsageError};
 use crate::models::user_api_keys::{NewUserApiKey, UserApiKey, UserApiKeyError};
@@ -514,7 +514,7 @@ pub trait DBConnection {
         limit: i64,
         after: Option<Uuid>,
         order: &str,
-        project_id: Option<i64>,
+        project_filter: ConversationProjectFilter,
         pinned: Option<bool>,
     ) -> Result<Vec<Conversation>, DBError>;
     fn list_conversation_projects(
@@ -2121,12 +2121,12 @@ impl DBConnection for PostgresConnection {
         limit: i64,
         after: Option<Uuid>,
         order: &str,
-        project_id: Option<i64>,
+        project_filter: ConversationProjectFilter,
         pinned: Option<bool>,
     ) -> Result<Vec<Conversation>, DBError> {
         debug!("Listing conversations for user");
         let conn = &mut self.db.get().map_err(|_| DBError::ConnectionError)?;
-        Conversation::list_for_user(conn, user_id, limit, after, order, project_id, pinned)
+        Conversation::list_for_user(conn, user_id, limit, after, order, project_filter, pinned)
             .map_err(DBError::from)
     }
 

@@ -3,7 +3,7 @@
 
 use crate::{
     encrypt::{decrypt_content, encrypt_with_key},
-    models::responses::NewConversation,
+    models::responses::{ConversationProjectFilter, NewConversation},
     models::users::User,
     web::{
         encryption_middleware::{decrypt_request, encrypt_response, EncryptedResponse},
@@ -258,7 +258,18 @@ pub struct ListConversationsParams {
     #[serde(default = "default_order")]
     pub order: String,
     pub project_id: Option<Uuid>,
+    pub unassigned_project: Option<bool>,
     pub pinned: Option<bool>,
+}
+
+impl ListConversationsParams {
+    fn validate(&self) -> Result<(), ApiError> {
+        if self.project_id.is_some() && self.unassigned_project == Some(true) {
+            return Err(ApiError::BadRequest);
+        }
+
+        Ok(())
+    }
 }
 
 /// Query parameters for listing conversation items
@@ -281,6 +292,30 @@ fn default_limit() -> i64 {
 
 fn default_order() -> String {
     DEFAULT_PAGINATION_ORDER.to_string()
+}
+
+fn resolve_conversation_project_filter(
+    state: &AppState,
+    user_uuid: Uuid,
+    params: &ListConversationsParams,
+) -> Result<ConversationProjectFilter, ApiError> {
+    params.validate()?;
+
+    if params.unassigned_project == Some(true) {
+        return Ok(ConversationProjectFilter::Unassigned);
+    }
+
+    if let Some(project_uuid) = params.project_id {
+        let project_id = state
+            .db
+            .get_conversation_project_by_uuid_and_user(project_uuid, user_uuid)
+            .map_err(error_mapping::map_conversation_project_error)?
+            .id;
+
+        return Ok(ConversationProjectFilter::Assigned(project_id));
+    }
+
+    Ok(ConversationProjectFilter::Any)
 }
 
 fn validate_metadata(metadata: &Value) -> Result<(), ApiError> {
@@ -695,17 +730,7 @@ async fn list_conversations(
         params.limit.min(MAX_PAGINATION_LIMIT)
     };
 
-    let project_id = if let Some(project_uuid) = params.project_id {
-        Some(
-            state
-                .db
-                .get_conversation_project_by_uuid_and_user(project_uuid, user.uuid)
-                .map_err(error_mapping::map_conversation_project_error)?
-                .id,
-        )
-    } else {
-        None
-    };
+    let project_filter = resolve_conversation_project_filter(&state, user.uuid, &params)?;
 
     // Fetch conversations with database-level pagination
     // We fetch limit + 1 to check if there are more results
@@ -716,7 +741,7 @@ async fn list_conversations(
             limit + 1,
             params.after,
             &params.order,
-            project_id,
+            project_filter,
             params.pinned,
         )
         .map_err(error_mapping::map_generic_db_error)?;
@@ -988,8 +1013,13 @@ pub fn router(state: Arc<AppState>) -> Router {
 
 #[cfg(test)]
 mod tests {
-    use super::{BatchUpdateConversationProjectRequest, UpdateConversationRequest};
+    use super::{
+        default_limit, default_order, BatchUpdateConversationProjectRequest,
+        ListConversationsParams, UpdateConversationRequest,
+    };
     use crate::web::responses::NullableField;
+    use crate::ApiError;
+    use uuid::Uuid;
 
     #[test]
     fn update_request_distinguishes_null_from_omitted_project_id() {
@@ -1024,5 +1054,33 @@ mod tests {
         let omitted: BatchUpdateConversationProjectRequest =
             serde_json::from_str(r#"{"ids":["550e8400-e29b-41d4-a716-446655440000"]}"#).unwrap();
         assert!(matches!(omitted.project_id, NullableField::Missing));
+    }
+
+    #[test]
+    fn list_conversation_params_allow_unassigned_project_without_project_id() {
+        let params = ListConversationsParams {
+            limit: default_limit(),
+            after: None,
+            order: default_order(),
+            project_id: None,
+            unassigned_project: Some(true),
+            pinned: None,
+        };
+
+        assert!(params.validate().is_ok());
+    }
+
+    #[test]
+    fn list_conversation_params_reject_conflicting_project_filters() {
+        let params = ListConversationsParams {
+            limit: default_limit(),
+            after: None,
+            order: default_order(),
+            project_id: Some(Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap()),
+            unassigned_project: Some(true),
+            pinned: None,
+        };
+
+        assert!(matches!(params.validate(), Err(ApiError::BadRequest)));
     }
 }
