@@ -500,7 +500,6 @@ impl Conversation {
         after: Option<Uuid>,
         order: &str,
         project_id: Option<i64>,
-        has_project: Option<bool>,
         pinned: Option<bool>,
     ) -> Result<Vec<Conversation>, ResponsesError> {
         let mut query = conversations::table
@@ -509,14 +508,6 @@ impl Conversation {
 
         if let Some(project_id) = project_id {
             query = query.filter(conversations::project_id.eq(Some(project_id)));
-        }
-
-        if let Some(has_project) = has_project {
-            query = if has_project {
-                query.filter(conversations::project_id.is_not_null())
-            } else {
-                query.filter(conversations::project_id.is_null())
-            };
         }
 
         if let Some(is_pinned) = pinned {

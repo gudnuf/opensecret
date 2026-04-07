@@ -509,7 +509,6 @@ pub trait DBConnection {
         after: Option<Uuid>,
         order: &str,
         project_id: Option<i64>,
-        has_project: Option<bool>,
         pinned: Option<bool>,
     ) -> Result<Vec<Conversation>, DBError>;
     fn list_conversation_projects(
@@ -2140,22 +2139,12 @@ impl DBConnection for PostgresConnection {
         after: Option<Uuid>,
         order: &str,
         project_id: Option<i64>,
-        has_project: Option<bool>,
         pinned: Option<bool>,
     ) -> Result<Vec<Conversation>, DBError> {
         debug!("Listing conversations for user");
         let conn = &mut self.db.get().map_err(|_| DBError::ConnectionError)?;
-        Conversation::list_for_user(
-            conn,
-            user_id,
-            limit,
-            after,
-            order,
-            project_id,
-            has_project,
-            pinned,
-        )
-        .map_err(DBError::from)
+        Conversation::list_for_user(conn, user_id, limit, after, order, project_id, pinned)
+            .map_err(DBError::from)
     }
 
     fn list_conversation_projects(

@@ -270,7 +270,6 @@ pub struct ListConversationsParams {
     #[serde(default = "default_order")]
     pub order: String,
     pub project_id: Option<Uuid>,
-    pub has_project: Option<bool>,
     pub pinned: Option<bool>,
 }
 
@@ -730,7 +729,6 @@ async fn list_conversations(
             params.after,
             &params.order,
             project_id,
-            params.has_project,
             params.pinned,
         )
         .map_err(error_mapping::map_generic_db_error)?;

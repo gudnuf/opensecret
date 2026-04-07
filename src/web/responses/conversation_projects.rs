@@ -83,7 +83,6 @@ pub struct ConversationProjectListItem {
     pub id: Uuid,
     pub object: &'static str,
     pub name: String,
-    pub has_instructions: bool,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -209,17 +208,11 @@ async fn list_conversation_projects(
         let name = decrypt_string(&user_key, Some(&project.name_enc))
             .map_err(|_| error_mapping::map_decryption_error("conversation project name"))?
             .ok_or(ApiError::InternalServerError)?;
-        let has_instructions = state
-            .db
-            .get_project_instruction(project.id, user.uuid)
-            .map_err(error_mapping::map_generic_db_error)?
-            .is_some();
 
         data.push(ConversationProjectListItem {
             id: project.uuid,
             object: OBJECT_TYPE_CONVERSATION_PROJECT,
             name,
-            has_instructions,
             created_at: project.created_at.timestamp(),
             updated_at: project.updated_at.timestamp(),
         });
