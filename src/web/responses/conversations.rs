@@ -812,8 +812,8 @@ async fn delete_all_conversations(
     encrypt_response(&state, &session_id, &response).await
 }
 
-/// Maximum number of conversations that can be deleted in a single batch request
-const MAX_BATCH_DELETE_SIZE: usize = 20;
+/// Maximum number of conversations allowed in a single batch operation request
+const MAX_CONVERSATION_BATCH_SIZE: usize = 20;
 
 /// POST /v1/conversations/batch-delete - Delete multiple specific conversations
 async fn batch_delete_conversations(
@@ -823,7 +823,7 @@ async fn batch_delete_conversations(
     Extension(body): Extension<BatchDeleteConversationsRequest>,
 ) -> Result<Json<EncryptedResponse<BatchDeleteConversationsResponse>>, ApiError> {
     // Validate batch size
-    if body.ids.is_empty() || body.ids.len() > MAX_BATCH_DELETE_SIZE {
+    if body.ids.is_empty() || body.ids.len() > MAX_CONVERSATION_BATCH_SIZE {
         return Err(ApiError::BadRequest);
     }
 
@@ -889,7 +889,7 @@ async fn batch_update_conversation_project(
     Extension(user): Extension<User>,
     Extension(body): Extension<BatchUpdateConversationProjectRequest>,
 ) -> Result<Json<EncryptedResponse<BatchUpdateConversationProjectResponse>>, ApiError> {
-    if body.ids.is_empty() || body.ids.len() > MAX_BATCH_DELETE_SIZE {
+    if body.ids.is_empty() || body.ids.len() > MAX_CONVERSATION_BATCH_SIZE {
         return Err(ApiError::BadRequest);
     }
 
