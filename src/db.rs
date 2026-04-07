@@ -501,6 +501,12 @@ pub trait DBConnection {
         project_id: Option<Option<i64>>,
         is_pinned: Option<bool>,
     ) -> Result<Conversation, DBError>;
+    fn batch_update_conversation_project(
+        &self,
+        conversation_uuids: &[Uuid],
+        user_id: Uuid,
+        target_project_id: Option<i64>,
+    ) -> Result<(), DBError>;
     #[allow(clippy::too_many_arguments)]
     fn list_conversations(
         &self,
@@ -2095,6 +2101,18 @@ impl DBConnection for PostgresConnection {
             is_pinned,
         )
         .map_err(DBError::from)
+    }
+
+    fn batch_update_conversation_project(
+        &self,
+        conversation_uuids: &[Uuid],
+        user_id: Uuid,
+        target_project_id: Option<i64>,
+    ) -> Result<(), DBError> {
+        debug!("Batch updating conversation projects");
+        let conn = &mut self.db.get().map_err(|_| DBError::ConnectionError)?;
+        Conversation::batch_update_project(conn, conversation_uuids, user_id, target_project_id)
+            .map_err(DBError::from)
     }
 
     fn list_conversations(

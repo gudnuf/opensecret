@@ -501,6 +501,79 @@ impl Conversation {
         updated.ok_or(ResponsesError::ConversationNotFound)
     }
 
+    pub fn batch_update_project(
+        conn: &mut PgConnection,
+        conversation_uuids: &[Uuid],
+        user_id: Uuid,
+        target_project_id: Option<i64>,
+    ) -> Result<(), ResponsesError> {
+        use diesel::Connection;
+
+        if conversation_uuids.is_empty() {
+            return Err(ResponsesError::ValidationError);
+        }
+
+        let unique_ids = conversation_uuids
+            .iter()
+            .copied()
+            .collect::<std::collections::HashSet<_>>();
+        if unique_ids.len() != conversation_uuids.len() {
+            return Err(ResponsesError::ValidationError);
+        }
+
+        conn.transaction(|tx| {
+            if let Some(target_project_id) = target_project_id {
+                let target_project = conversation_projects::table
+                    .filter(conversation_projects::id.eq(target_project_id))
+                    .filter(conversation_projects::user_id.eq(user_id))
+                    .select(conversation_projects::id)
+                    .for_update()
+                    .first::<i64>(tx)
+                    .optional()?;
+
+                if target_project.is_none() {
+                    return Err(ResponsesError::ConversationProjectNotFound);
+                }
+            }
+
+            let existing_conversations = conversations::table
+                .filter(conversations::user_id.eq(user_id))
+                .filter(conversations::uuid.eq_any(conversation_uuids))
+                .for_update()
+                .load::<Conversation>(tx)?;
+
+            if existing_conversations.len() != conversation_uuids.len() {
+                return Err(ResponsesError::ConversationNotFound);
+            }
+
+            let source_project_id = existing_conversations
+                .first()
+                .map(|conversation| conversation.project_id)
+                .ok_or(ResponsesError::ValidationError)?;
+
+            if existing_conversations
+                .iter()
+                .any(|conversation| conversation.project_id != source_project_id)
+            {
+                return Err(ResponsesError::ValidationError);
+            }
+
+            let updated = diesel::update(
+                conversations::table
+                    .filter(conversations::user_id.eq(user_id))
+                    .filter(conversations::uuid.eq_any(conversation_uuids)),
+            )
+            .set(conversations::project_id.eq(target_project_id))
+            .execute(tx)?;
+
+            if updated != conversation_uuids.len() {
+                return Err(ResponsesError::ConversationNotFound);
+            }
+
+            Ok(())
+        })
+    }
+
     pub fn delete_by_id_and_user(
         conn: &mut PgConnection,
         conversation_id: i64,

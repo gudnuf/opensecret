@@ -198,22 +198,10 @@ pub struct BatchDeleteConversationsResponse {
     pub data: Vec<BatchDeleteItemResult>,
 }
 
-/// Individual result for a batch project update operation
-#[derive(Debug, Clone, Serialize)]
-pub struct BatchUpdateConversationProjectItemResult {
-    pub id: Uuid,
-    pub object: &'static str,
-    pub updated: bool,
-    pub project_id: Option<Uuid>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<&'static str>,
-}
-
 /// Response for batch project update operations
 #[derive(Debug, Clone, Serialize)]
 pub struct BatchUpdateConversationProjectResponse {
-    pub object: &'static str,
-    pub data: Vec<BatchUpdateConversationProjectItemResult>,
+    pub success: bool,
 }
 
 /// Response for a conversation object
@@ -908,76 +896,18 @@ async fn batch_update_conversation_project(
         NullableField::Missing => return Err(ApiError::BadRequest),
     };
 
-    let mut results = Vec::with_capacity(body.ids.len());
-    let mut project_cache = HashMap::new();
-    if let (Some(project_uuid), Some(project_id)) = (target_project_uuid, target_project_id) {
-        project_cache.insert(project_id, project_uuid);
-    }
+    debug!(
+        "Batch updating {} conversations to project {:?}",
+        body.ids.len(),
+        target_project_uuid
+    );
 
-    for conversation_id in body.ids {
-        match state
-            .db
-            .get_conversation_by_uuid_and_user(conversation_id, user.uuid)
-        {
-            Ok(conversation) => match state.db.update_conversation(
-                conversation.id,
-                user.uuid,
-                None,
-                Some(target_project_id),
-                None,
-            ) {
-                Ok(updated_conversation) => {
-                    let project_id = resolve_project_uuid(
-                        &state,
-                        user.uuid,
-                        updated_conversation.project_id,
-                        &mut project_cache,
-                    )?;
+    state
+        .db
+        .batch_update_conversation_project(&body.ids, user.uuid, target_project_id)
+        .map_err(error_mapping::map_batch_conversation_project_error)?;
 
-                    results.push(BatchUpdateConversationProjectItemResult {
-                        id: conversation_id,
-                        object: constants::OBJECT_TYPE_CONVERSATION,
-                        updated: true,
-                        project_id,
-                        error: None,
-                    });
-                }
-                Err(e) => {
-                    error!(
-                        "Failed to update conversation project for {}: {:?}",
-                        conversation_id, e
-                    );
-
-                    let project_id = resolve_project_uuid(
-                        &state,
-                        user.uuid,
-                        conversation.project_id,
-                        &mut project_cache,
-                    )?;
-
-                    results.push(BatchUpdateConversationProjectItemResult {
-                        id: conversation_id,
-                        object: constants::OBJECT_TYPE_CONVERSATION,
-                        updated: false,
-                        project_id,
-                        error: Some("update_failed"),
-                    });
-                }
-            },
-            Err(_) => results.push(BatchUpdateConversationProjectItemResult {
-                id: conversation_id,
-                object: constants::OBJECT_TYPE_CONVERSATION,
-                updated: false,
-                project_id: None,
-                error: Some("not_found"),
-            }),
-        }
-    }
-
-    let response = BatchUpdateConversationProjectResponse {
-        object: OBJECT_TYPE_LIST,
-        data: results,
-    };
+    let response = BatchUpdateConversationProjectResponse { success: true };
 
     encrypt_response(&state, &session_id, &response).await
 }
