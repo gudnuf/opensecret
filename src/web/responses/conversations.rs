@@ -523,7 +523,7 @@ async fn update_conversation(
             project_update,
             body.pinned,
         )
-        .map_err(error_mapping::map_generic_db_error)?;
+        .map_err(error_mapping::map_conversation_error)?;
 
     let response = build_conversation_response(
         &state,
