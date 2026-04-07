@@ -413,6 +413,14 @@ pub struct NewConversation {
     pub metadata_enc: Option<Vec<u8>>,
 }
 
+#[derive(AsChangeset, Default)]
+#[diesel(table_name = conversations)]
+struct ConversationUpdateChanges {
+    metadata_enc: Option<Vec<u8>>,
+    project_id: Option<Option<i64>>,
+    is_pinned: Option<bool>,
+}
+
 impl Conversation {
     pub fn get_by_id_and_user(
         conn: &mut PgConnection,
@@ -450,12 +458,43 @@ impl Conversation {
         user_id: Uuid,
         metadata_enc: Vec<u8>,
     ) -> Result<Conversation, ResponsesError> {
+        Self::update(
+            conn,
+            conversation_id,
+            user_id,
+            Some(metadata_enc),
+            None,
+            None,
+        )
+    }
+
+    pub fn update(
+        conn: &mut PgConnection,
+        conversation_id: i64,
+        user_id: Uuid,
+        metadata_enc: Option<Vec<u8>>,
+        project_id: Option<Option<i64>>,
+        is_pinned: Option<bool>,
+    ) -> Result<Conversation, ResponsesError> {
+        let changes = ConversationUpdateChanges {
+            metadata_enc,
+            project_id,
+            is_pinned,
+        };
+
+        if changes.metadata_enc.is_none()
+            && changes.project_id.is_none()
+            && changes.is_pinned.is_none()
+        {
+            return Self::get_by_id_and_user(conn, conversation_id, user_id);
+        }
+
         let updated = diesel::update(
             conversations::table
                 .filter(conversations::id.eq(conversation_id))
                 .filter(conversations::user_id.eq(user_id)),
         )
-        .set(conversations::metadata_enc.eq(metadata_enc))
+        .set(changes)
         .get_result::<Conversation>(conn)
         .optional()?;
 

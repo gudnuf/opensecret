@@ -2086,50 +2086,15 @@ impl DBConnection for PostgresConnection {
     ) -> Result<Conversation, DBError> {
         debug!("Updating conversation");
         let conn = &mut self.db.get().map_err(|_| DBError::ConnectionError)?;
-
-        use crate::models::schema::conversations;
-        use diesel::prelude::*;
-
-        conn.transaction(|tx| {
-            let target = conversations::table
-                .filter(conversations::id.eq(conversation_id))
-                .filter(conversations::user_id.eq(user_id));
-
-            let exists = target
-                .select(conversations::id)
-                .first::<i64>(tx)
-                .optional()?;
-
-            if exists.is_none() {
-                return Err(diesel::result::Error::NotFound);
-            }
-
-            if let Some(metadata_enc) = metadata_enc {
-                diesel::update(target)
-                    .set(conversations::metadata_enc.eq(metadata_enc))
-                    .execute(tx)?;
-            }
-
-            if let Some(project_id) = project_id {
-                diesel::update(target)
-                    .set(conversations::project_id.eq(project_id))
-                    .execute(tx)?;
-            }
-
-            if let Some(is_pinned) = is_pinned {
-                diesel::update(target)
-                    .set(conversations::is_pinned.eq(is_pinned))
-                    .execute(tx)?;
-            }
-
-            target.first::<Conversation>(tx)
-        })
-        .map_err(|e| match e {
-            diesel::result::Error::NotFound => {
-                DBError::ResponsesError(ResponsesError::ConversationNotFound)
-            }
-            _ => DBError::ResponsesError(ResponsesError::DatabaseError(e)),
-        })
+        Conversation::update(
+            conn,
+            conversation_id,
+            user_id,
+            metadata_enc,
+            project_id,
+            is_pinned,
+        )
+        .map_err(DBError::from)
     }
 
     fn list_conversations(
