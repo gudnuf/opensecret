@@ -14,10 +14,13 @@ ALTER TABLE user_instructions ALTER COLUMN name_enc SET NOT NULL;
 
 DROP INDEX IF EXISTS idx_conversations_pinned_last_activity_id;
 DROP INDEX IF EXISTS idx_conversations_project_last_activity_id;
+DROP INDEX IF EXISTS idx_conversations_last_activity_id;
 DROP INDEX IF EXISTS idx_conversations_project_id;
 ALTER TABLE conversations DROP COLUMN IF EXISTS is_pinned;
 ALTER TABLE conversations DROP COLUMN IF EXISTS project_id;
 ALTER TABLE conversations DROP COLUMN IF EXISTS last_activity_at;
+CREATE INDEX idx_conversations_updated_id
+    ON conversations(user_id, updated_at DESC, id DESC);
 
 DROP TRIGGER IF EXISTS update_conversation_projects_updated_at ON conversation_projects;
 DROP INDEX IF EXISTS idx_conversation_projects_updated_id;

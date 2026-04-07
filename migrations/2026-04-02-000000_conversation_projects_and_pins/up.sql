@@ -30,11 +30,16 @@ CREATE INDEX idx_conversations_project_id
     ON conversations(project_id)
     WHERE project_id IS NOT NULL;
 
+CREATE INDEX idx_conversations_last_activity_id
+    ON conversations(user_id, last_activity_at DESC, id DESC);
+
 CREATE INDEX idx_conversations_project_last_activity_id
     ON conversations(user_id, project_id, last_activity_at DESC, id DESC);
 
 CREATE INDEX idx_conversations_pinned_last_activity_id
     ON conversations(user_id, is_pinned, last_activity_at DESC, id DESC);
+
+DROP INDEX IF EXISTS idx_conversations_updated_id;
 
 ALTER TABLE user_instructions
     ADD COLUMN project_id BIGINT REFERENCES conversation_projects(id) ON DELETE CASCADE;
